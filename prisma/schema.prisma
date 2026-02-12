@@ -1,0 +1,28 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model WeatherData {
+  id          String   @id @default(cuid())
+  location    String   // e.g., "Ottawa"
+  latitude    Float
+  longitude   Float
+  date        DateTime // Date of the weather record
+  tempMax     Float    // Highest temperature (Celsius)
+  tempMin     Float    // Lowest temperature
+  sunrise     DateTime // Sunrise time (UTC)
+  sunset      DateTime // Sunset time (UTC)
+  description String   // e.g., "Clear sky"
+  createdAt   DateTime @default(now())
+  
+  @@unique([location, date])
+  @@index([location, date])
+}
