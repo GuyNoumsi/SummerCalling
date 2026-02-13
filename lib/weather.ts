@@ -295,22 +295,33 @@ export function detectSummerDays(currentWeekData: WeatherData[], monthData: Weat
       continue;
     }
 
-    // Find the latest sunset and earliest sunrise from previous days
-    let latestPreviousSunset = previousDays[0].sunset;
-    let earliestPreviousSunrise = previousDays[0].sunrise;
+    // Helper function to get time of day in minutes since midnight
+    const getTimeInMinutes = (date: Date): number => {
+      return date.getHours() * 60 + date.getMinutes();
+    };
+
+    // Find the latest sunset and earliest sunrise TIME from previous days (not including date)
+    let latestSunsetMinutes = getTimeInMinutes(previousDays[0].sunset);
+    let earliestSunriseMinutes = getTimeInMinutes(previousDays[0].sunrise);
     
     for (const prevDay of previousDays) {
-      if (prevDay.sunset > latestPreviousSunset) {
-        latestPreviousSunset = prevDay.sunset;
+      const prevSunsetMinutes = getTimeInMinutes(prevDay.sunset);
+      const prevSunriseMinutes = getTimeInMinutes(prevDay.sunrise);
+      
+      if (prevSunsetMinutes > latestSunsetMinutes) {
+        latestSunsetMinutes = prevSunsetMinutes;
       }
-      if (prevDay.sunrise < earliestPreviousSunrise) {
-        earliestPreviousSunrise = prevDay.sunrise;
+      if (prevSunriseMinutes < earliestSunriseMinutes) {
+        earliestSunriseMinutes = prevSunriseMinutes;
       }
     }
 
-    // Calculate differences in minutes
-    const sunsetDiffMinutes = Math.round((currentDay.sunset.getTime() - latestPreviousSunset.getTime()) / (1000 * 60));
-    const sunriseDiffMinutes = Math.round((earliestPreviousSunrise.getTime() - currentDay.sunrise.getTime()) / (1000 * 60));
+    // Calculate differences in minutes (comparing time-of-day only)
+    const currentSunsetMinutes = getTimeInMinutes(currentDay.sunset);
+    const currentSunriseMinutes = getTimeInMinutes(currentDay.sunrise);
+    
+    const sunsetDiffMinutes = currentSunsetMinutes - latestSunsetMinutes;
+    const sunriseDiffMinutes = earliestSunriseMinutes - currentSunriseMinutes;
 
     detections.push({
       date: currentDay.date,
