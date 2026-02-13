@@ -70,12 +70,39 @@ export async function searchLocations(query: string): Promise<Array<{ name: stri
 async function fetchForecastFromAPI(lat: number, lon: number): Promise<any> {
   const url = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&units=metric&appid=${OPENWEATHER_API_KEY}`;
   
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`OpenWeatherMap API error: ${response.status}`);
+  if (!OPENWEATHER_API_KEY) {
+    console.error("❌ OPENWEATHER_API_KEY is missing!");
+    throw new Error("OPENWEATHER_API_KEY is missing");
   }
+
+  console.log(`Fetching forecast for ${lat}, ${lon}`);
   
-  return response.json();
+  try {
+    const response = await fetch(url, { next: { revalidate: 3600 } }); // Add revalidation
+    
+    if (!response.ok) {
+      console.error(`API Error: ${response.status} ${response.statusText}`);
+      const text = await response.text();
+      console.error(`API Error Body: ${text}`);
+      throw new Error(`OpenWeatherMap API error: ${response.status}`);
+    }
+    
+    const text = await response.text();
+    if (!text) {
+        console.error("API returned empty body for forecast");
+        throw new Error("API returned empty body");
+    }
+
+    try {
+        return JSON.parse(text);
+    } catch (e) {
+        console.error("Failed to parse JSON for forecast:", text.substring(0, 100));
+        throw e;
+    }
+  } catch (error) {
+    console.error("Fetch error in forecast:", error);
+    throw error;
+  }
 }
 
 /**
@@ -84,12 +111,32 @@ async function fetchForecastFromAPI(lat: number, lon: number): Promise<any> {
 async function fetchCurrentWeatherFromAPI(lat: number, lon: number): Promise<any> {
   const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=${OPENWEATHER_API_KEY}`;
   
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`OpenWeatherMap API error: ${response.status}`);
+  console.log(`Fetching current weather for ${lat}, ${lon}`);
+
+  try {
+    const response = await fetch(url, { next: { revalidate: 3600 } });
+    
+    if (!response.ok) {
+      console.error(`API Error: ${response.status} ${response.statusText}`);
+      throw new Error(`OpenWeatherMap API error: ${response.status}`);
+    }
+    
+    const text = await response.text();
+    if (!text) {
+        console.error("API returned empty body for current weather");
+        throw new Error("API returned empty body");
+    }
+
+    try {
+        return JSON.parse(text);
+    } catch (e) {
+        console.error("Failed to parse JSON for current weather:", text.substring(0, 100));
+        throw e;
+    }
+  } catch (error) {
+      console.error("Fetch error in current weather:", error);
+      throw error;
   }
-  
-  return response.json();
 }
 
 /**
