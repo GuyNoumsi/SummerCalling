@@ -140,6 +140,15 @@ async function fetchCurrentWeatherFromAPI(lat: number, lon: number): Promise<any
 }
 
 /**
+
+/**
+ * Normalize date to UTC midnight to avoid timezone issues/duplicates
+ */
+const normalizeDate = (date: Date): Date => {
+  return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+};
+
+/**
  * Get current week's weather data (7 days from today)
  */
 export async function getCurrentWeekWeather(location: string): Promise<WeatherData[]> {
@@ -150,8 +159,8 @@ export async function getCurrentWeekWeather(location: string): Promise<WeatherDa
   }
 
   const now = new Date();
-  const weekStart = startOfDay(now);
-  const weekEnd = endOfDay(new Date(now.getTime() + 6 * 24 * 60 * 60 * 1000)); // 7 days from now
+  const weekStart = normalizeDate(now);
+  const weekEnd = new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000); // 7 days from now (normalized)
 
   // Check if we have cached data less than 5 hours old
   const cachedData = await prisma.weatherData.findMany({
@@ -186,10 +195,12 @@ export async function getCurrentWeekWeather(location: string): Promise<WeatherDa
   const dailyData = new Map<string, any>();
   
   // Add today's data from current weather
-  const today = startOfDay(new Date());
-  const todayKey = today.toISOString().split('T')[0];
+  const today = new Date();
+  const normalizedToday = normalizeDate(today);
+  const todayKey = normalizedToday.toISOString().split('T')[0];
+  
   dailyData.set(todayKey, {
-    date: today,
+    date: normalizedToday,
     tempMax: currentWeather.main.temp_max,
     tempMin: currentWeather.main.temp_min,
     sunrise: new Date(currentWeather.sys.sunrise * 1000),
@@ -199,16 +210,16 @@ export async function getCurrentWeekWeather(location: string): Promise<WeatherDa
 
   // Process 5-day forecast (3-hour intervals)
   for (const item of forecast.list) {
-    const date = startOfDay(new Date(item.dt * 1000));
-    const dateKey = date.toISOString().split('T')[0];
+    const forecastDate = new Date(item.dt * 1000);
+    const normalizedForecastDate = normalizeDate(forecastDate);
+    const dateKey = normalizedForecastDate.toISOString().split('T')[0];
     
     // Skip if we already have 7 days
-    const daysSinceToday = Math.floor((date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    if (daysSinceToday >= 7) continue;
+    if (dailyData.size >= 7 && !dailyData.has(dateKey)) continue;
     
     if (!dailyData.has(dateKey)) {
       dailyData.set(dateKey, {
-        date: date,
+        date: normalizedForecastDate,
         tempMax: item.main.temp_max,
         tempMin: item.main.temp_min,
         sunrise: item.sys?.sunrise ? new Date(item.sys.sunrise * 1000) : null,
@@ -234,7 +245,7 @@ export async function getCurrentWeekWeather(location: string): Promise<WeatherDa
     for (const [key, data] of dailyData.entries()) {
       if (!data.sunrise || !data.sunset) {
         // Estimate: sunrise ~2 min earlier per day, sunset ~2 min later per day (approximation)
-        const daysDiff = Math.floor((data.date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        const daysDiff = Math.floor((data.date.getTime() - normalizedToday.getTime()) / (1000 * 60 * 60 * 24));
         
         const estimatedSunrise = new Date(data.date);
         estimatedSunrise.setHours(sunriseHour, sunriseMinute - (daysDiff * 2), 0, 0);
@@ -248,47 +259,38 @@ export async function getCurrentWeekWeather(location: string): Promise<WeatherDa
     }
   }
 
-  // Convert to array and store in database
+  // Convert to array and store in database using upsert
   const weatherRecords: WeatherData[] = [];
   const sortedDays = Array.from(dailyData.values()).sort((a, b) => a.date.getTime() - b.date.getTime());
 
   for (const dayData of sortedDays.slice(0, 7)) { // Ensure only 7 days
-    const existing = await prisma.weatherData.findUnique({
+    const record = await prisma.weatherData.upsert({
       where: {
         location_date: {
           location: coords.name,
           date: dayData.date,
         },
       },
+      update: {
+        tempMax: dayData.tempMax,
+        tempMin: dayData.tempMin,
+        sunrise: dayData.sunrise,
+        sunset: dayData.sunset,
+        description: dayData.description,
+        createdAt: new Date(), // Update cache timestamp
+      },
+      create: {
+        location: coords.name,
+        latitude: coords.lat,
+        longitude: coords.lon,
+        date: dayData.date,
+        tempMax: dayData.tempMax,
+        tempMin: dayData.tempMin,
+        sunrise: dayData.sunrise,
+        sunset: dayData.sunset,
+        description: dayData.description,
+      },
     });
-
-    let record;
-    if (existing) {
-      record = await prisma.weatherData.update({
-        where: { id: existing.id },
-        data: {
-          tempMax: dayData.tempMax,
-          tempMin: dayData.tempMin,
-          sunrise: dayData.sunrise,
-          sunset: dayData.sunset,
-          description: dayData.description,
-        },
-      });
-    } else {
-      record = await prisma.weatherData.create({
-        data: {
-          location: coords.name,
-          latitude: coords.lat,
-          longitude: coords.lon,
-          date: dayData.date,
-          tempMax: dayData.tempMax,
-          tempMin: dayData.tempMin,
-          sunrise: dayData.sunrise,
-          sunset: dayData.sunset,
-          description: dayData.description,
-        },
-      });
-    }
     
     weatherRecords.push(record);
   }
