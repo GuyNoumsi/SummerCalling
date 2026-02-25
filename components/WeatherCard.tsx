@@ -30,6 +30,12 @@ export default function WeatherCard({
 }: WeatherCardProps) {
   const isSummerDay = isLaterSunset && isEarlierSunrise;
   
+  // Backend provides UTC midnight dates (e.g. 2026-02-25T00:00:00.000Z)
+  // Parsing this in the browser shifts it to local time (e.g. Feb 24 19:00 EST)
+  // We need to create a local Date object with the exact same year/month/day
+  const utcDate = new Date(date);
+  const localDate = new Date(utcDate.getUTCFullYear(), utcDate.getUTCMonth(), utcDate.getUTCDate());
+
   return (
     <div className={`glass-hover rounded-3xl p-6 relative overflow-hidden ${isSummerDay ? 'pulse-glow' : ''}`}>
       {/* Background pattern */}
@@ -41,10 +47,10 @@ export default function WeatherCard({
       <div className="relative z-10">
         {/* Date */}
         <div className="text-white/80 text-sm font-medium mb-2">
-          {format(new Date(date), 'EEEE')}
+          {format(localDate, 'EEEE')}
         </div>
         <div className="text-white text-2xl font-bold mb-4">
-          {format(new Date(date), 'MMM d')}
+          {format(localDate, 'MMM d')}
         </div>
 
         {/* Temperature */}

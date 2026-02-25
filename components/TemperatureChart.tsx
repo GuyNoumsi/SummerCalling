@@ -11,10 +11,15 @@ interface TemperatureChartProps {
 }
 
 export default function TemperatureChart({ data }: TemperatureChartProps) {
-  const chartData = data.map(item => ({
-    date: format(new Date(item.date), 'EEE'),
-    temp: Math.round(item.tempMax),
-  }));
+  const chartData = data.map(item => {
+    const utcDate = new Date(item.date);
+    const localDate = new Date(utcDate.getUTCFullYear(), utcDate.getUTCMonth(), utcDate.getUTCDate());
+    
+    return {
+      date: format(localDate, 'EEE'),
+      temp: Math.round(item.tempMax),
+    };
+  });
 
   return (
     <div className="glass rounded-3xl p-6">

@@ -24,11 +24,16 @@ export default function SunChart({ data }: SunChartProps) {
     return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
   };
 
-  const chartData = data.map(item => ({
-    date: format(new Date(item.date), 'EEE'),
-    sunrise: getMinutesSinceMidnight(new Date(item.sunrise)),
-    sunset: getMinutesSinceMidnight(new Date(item.sunset)),
-  }));
+  const chartData = data.map(item => {
+    const utcDate = new Date(item.date);
+    const localDate = new Date(utcDate.getUTCFullYear(), utcDate.getUTCMonth(), utcDate.getUTCDate());
+    
+    return {
+      date: format(localDate, 'EEE'),
+      sunrise: getMinutesSinceMidnight(new Date(item.sunrise)),
+      sunset: getMinutesSinceMidnight(new Date(item.sunset)),
+    };
+  });
 
   return (
     <div className="glass rounded-3xl p-6">
